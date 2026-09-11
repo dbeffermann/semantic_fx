@@ -1,0 +1,1411 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Semantic FX — Level Creator + Live Graph</title>
+<script src="https://cdn.jsdelivr.net/npm/pixi.js@8.19.0/dist/pixi.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/elkjs@0.10.0/lib/elk.bundled.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.15.0/dist/gsap.min.js"></script>
+<style>
+:root{
+  --paper:#f5efdd; --paper2:#fbf7ea; --ink:#2d2a25; --muted:#756e61; --line:#b8ab8d;
+  --violet:#8672f2; --mint:#5dd2b5; --amber:#f0b34e; --rose:#ef7f8c; --blue:#78b7e8;
+  --desk1:#624a37; --desk2:#513d2f;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{
+  font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  color:var(--ink); background:#3f3026; overflow:hidden;
+}
+button,input,textarea,select{font:inherit}
+button{cursor:pointer}
+#app{position:relative;width:100vw;height:100vh;overflow:hidden}
+.desk{
+  position:absolute;inset:0;
+  background:
+    radial-gradient(circle at 18% 18%,rgba(255,255,255,.04),transparent 28%),
+    repeating-linear-gradient(0deg,var(--desk1) 0 3px,var(--desk1) 3px 76px,var(--desk2) 76px 80px);
+}
+.desk:after{
+  content:"";position:absolute;inset:0;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='2'/%3E%3CfeComponentTransfer%3E%3CfeFuncA type='table' tableValues='0 .045'/%3E%3C/feComponentTransfer%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  opacity:.45;
+}
+.shell{
+  position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
+  width:min(1420px,calc(100vw - 28px)); height:min(910px,calc(100vh - 28px));
+  filter:drop-shadow(0 34px 48px rgba(0,0,0,.28));
+}
+.page{
+  position:absolute;inset:0 0 0 25px;border-radius:28px;overflow:hidden;
+  background:
+    repeating-linear-gradient(180deg,transparent 0 34px,rgba(190,180,151,.36) 34px 35px),
+    linear-gradient(90deg,transparent 0 76px,rgba(216,122,118,.52) 76px 78px,transparent 78px),
+    linear-gradient(180deg,#faf5e7,#f2ead4);
+  border:1px solid rgba(186,170,137,.45);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.8),0 14px 30px rgba(0,0,0,.15);
+}
+.page:after{
+  content:"";position:absolute;inset:0;pointer-events:none;opacity:.35;mix-blend-mode:multiply;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.95' numOctaves='2'/%3E%3CfeComponentTransfer%3E%3CfeFuncA type='table' tableValues='0 .035'/%3E%3C/feComponentTransfer%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+.binding{position:absolute;left:0;top:0;bottom:0;width:68px;display:flex;flex-direction:column;justify-content:space-evenly;align-items:center;z-index:3}
+.ring{width:28px;height:28px;border:4px solid #bec3c7;border-radius:50%;background:radial-gradient(circle at 30% 30%,#fff,#d6dade 62%,#b7bec3);box-shadow:0 2px 4px rgba(0,0,0,.15),inset 0 1px 0 white}
+.ui{position:relative;z-index:2;height:100%;padding:18px 22px 18px 102px;display:grid;grid-template-rows:auto 1fr;gap:14px}
+.topbar{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.mode-tabs{display:flex;gap:8px}
+.btn,.select,.field{
+  border:1.5px solid rgba(143,126,96,.75);border-radius:14px;background:linear-gradient(180deg,#fbf6e9,#e9dfc7);
+  color:var(--ink);box-shadow:0 3px 0 rgba(157,139,104,.72),inset 0 1px 0 rgba(255,255,255,.9);
+}
+.btn{min-height:40px;padding:0 13px;font-size:12px;font-weight:850;letter-spacing:.04em}
+.btn.active{background:linear-gradient(180deg,#ede7ff,#dcd4ff);border-color:#8b7cea}
+.btn.primary{background:linear-gradient(180deg,#f7e6bd,#ecd29a)}
+.btn.mint{background:linear-gradient(180deg,#e7f7f1,#d5eee5)}
+.btn.danger{background:linear-gradient(180deg,#fdecef,#f4d4da)}
+.btn:active{transform:translateY(2px);box-shadow:0 1px 0 rgba(157,139,104,.72)}
+.select{min-height:40px;padding:0 11px;background:#faf5e9}
+.metrics{display:flex;gap:10px}
+.metric{min-width:96px;padding:8px 12px;border:1px solid rgba(174,159,126,.62);border-radius:15px;background:rgba(255,255,255,.48)}
+.metric b{display:block;font-size:23px;line-height:1;letter-spacing:-.04em}
+.metric span{display:block;margin-top:3px;color:var(--muted);font-size:9px;text-transform:uppercase;letter-spacing:.12em}
+.view{display:none;min-height:0}
+.view.active{display:grid}
+
+/* PLAY */
+#playView{grid-template-rows:1fr 188px;gap:14px}
+.workspace{display:grid;grid-template-columns:245px 1fr;gap:14px;min-height:0}
+.reference,.stage,.editor-card,.creator-panel,.preview-panel{
+  background:rgba(255,255,255,.28);border:1px solid rgba(171,155,121,.62);border-radius:22px;
+}
+.reference{padding:16px;display:grid;grid-template-rows:auto 1fr auto;gap:10px;min-height:0}
+.reference h3,.creator-panel h3,.preview-panel h3{margin:0;font-size:12px;text-transform:uppercase;letter-spacing:.14em}
+.reference-sub,.muted{font-size:11px;color:var(--muted);line-height:1.45}
+#targetSvg{width:100%;height:100%;min-height:280px}
+.ref-note{font-size:10px;color:var(--muted);line-height:1.45}
+.stage{position:relative;overflow:hidden;min-height:0}
+.stage-title{position:absolute;left:18px;top:15px;z-index:7;font-size:11px;font-weight:900;letter-spacing:.15em;text-transform:uppercase;color:var(--muted)}
+#pixiHost{position:absolute;inset:0}
+.fallback{display:none;position:absolute;inset:0;place-items:center;padding:30px;text-align:center;color:var(--muted)}
+.zoom{position:absolute;right:13px;bottom:13px;z-index:10;display:flex;gap:7px;align-items:center}
+.zoom .btn{min-width:40px;padding:0}
+.zoom-label{min-width:48px;text-align:center;font-size:11px;font-weight:850;color:var(--muted)}
+.editor-card{padding:12px;display:grid;grid-template-columns:1.3fr .7fr;gap:12px}
+.writer{display:grid;grid-template-rows:auto 1fr;gap:6px}
+.writer label,.feedback-title{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.13em;font-weight:850}
+.writer textarea{
+  width:100%;height:100%;resize:none;border:1.5px solid rgba(148,132,100,.6);border-radius:16px;background:rgba(255,255,255,.55);
+  padding:14px 16px;outline:none;color:var(--ink);font-size:19px;line-height:1.5;box-shadow:inset 0 2px 8px rgba(111,91,58,.06);
+}
+.writer textarea:focus{border-color:rgba(134,114,242,.75);box-shadow:0 0 0 3px rgba(134,114,242,.08),inset 0 2px 8px rgba(111,91,58,.06)}
+.feedback{padding:11px 13px;border-left:1px dashed rgba(161,145,112,.58);overflow:auto}
+.tokens{margin-top:8px;font-size:14px;line-height:1.65}
+.tok{border-radius:6px;padding:1px 2px;cursor:help}
+.tok.soft{background:rgba(93,210,181,.14);box-shadow:inset 0 -2px 0 rgba(93,210,181,.86)}
+.tok.strong{background:rgba(134,114,242,.13);box-shadow:inset 0 -2px 0 rgba(134,114,242,.94)}
+.tok.rel{background:rgba(240,179,78,.15);box-shadow:inset 0 -2px 0 rgba(240,179,78,.92)}
+
+/* CREATOR */
+#creatorView{grid-template-columns:390px 1fr;gap:14px;min-height:0}
+.creator-panel{padding:16px;display:grid;grid-template-rows:auto auto auto auto 1fr auto;gap:12px;min-height:0;overflow:hidden}
+.creator-panel textarea{
+  width:100%;min-height:115px;resize:vertical;border:1.5px solid rgba(148,132,100,.58);border-radius:16px;background:rgba(255,255,255,.58);
+  padding:12px 13px;color:var(--ink);outline:none;line-height:1.45;
+}
+.creator-toolbar{display:flex;gap:8px;flex-wrap:wrap}
+.creator-scroll{overflow:auto;padding-right:4px}
+.section-head{display:flex;align-items:center;justify-content:space-between;margin:8px 0 6px}
+.section-head b{font-size:10px;text-transform:uppercase;letter-spacing:.13em;color:var(--muted)}
+.edit-row{
+  display:grid;gap:6px;align-items:center;margin-bottom:7px;padding:8px;border-radius:13px;background:rgba(255,255,255,.4);border:1px solid rgba(181,166,133,.5)
+}
+.node-row{grid-template-columns:1.05fr .72fr .95fr 1.05fr 72px 54px 48px 30px}
+.edge-row{grid-template-columns:1fr 1fr .95fr 58px 50px 30px}
+.mini-input,.mini-select{
+  width:100%;min-width:0;border:1px solid rgba(155,139,108,.52);border-radius:9px;background:rgba(255,255,255,.72);
+  padding:6px 7px;color:var(--ink);font-size:11px;outline:none;
+}
+.check-wrap{display:flex;justify-content:center}
+.icon-btn{width:28px;height:28px;border:1px solid rgba(155,139,108,.52);border-radius:9px;background:rgba(255,255,255,.62);font-weight:900}
+.preview-panel{padding:14px;display:grid;grid-template-rows:auto 1fr auto;gap:10px;min-height:0}
+#draftSvg{width:100%;height:100%;min-height:470px;border-radius:16px;background:rgba(255,255,255,.18)}
+.creator-actions{display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap}
+.creator-help{font-size:10px;color:var(--muted);line-height:1.45}
+
+/* modal tooltip */
+.tooltip{
+  position:fixed;z-index:50;max-width:270px;padding:10px 12px;border-radius:13px;background:rgba(54,47,39,.96);color:#f8f1e2;
+  font-size:12px;line-height:1.4;pointer-events:none;opacity:0;transform:translateY(4px);transition:.12s;
+}
+.tooltip.show{opacity:1;transform:translateY(0)}
+.tooltip strong{display:block;color:#ffe3a8;font-size:11px;text-transform:uppercase;letter-spacing:.09em}
+.tooltip em{display:block;margin-top:5px;color:#d7c6a4;font-size:10px;font-style:normal}
+.modal{position:fixed;inset:0;z-index:60;display:none;place-items:center;background:rgba(40,29,21,.45);backdrop-filter:blur(3px)}
+.modal.open{display:grid}
+.modal-card{width:min(570px,calc(100vw - 30px));padding:22px;border-radius:22px;background:#f8f0da;border:1px solid rgba(166,145,107,.72);box-shadow:0 22px 60px rgba(0,0,0,.28)}
+.modal-card h2{margin:0 0 10px;font-size:18px}
+.modal-card p{font-size:17px;line-height:1.55}
+.empty{display:grid;place-items:center;height:100%;color:var(--muted);font-size:13px;text-align:center;padding:30px}
+
+
+.claim-strip{
+  position:absolute;left:18px;right:18px;bottom:14px;z-index:8;
+  display:flex;gap:8px;align-items:center;flex-wrap:wrap;pointer-events:none;
+}
+.claim-chip{
+  pointer-events:auto;padding:7px 10px;border-radius:999px;border:1px solid rgba(137,120,88,.52);
+  background:rgba(251,246,233,.88);font-size:10px;font-weight:850;letter-spacing:.05em;
+  box-shadow:0 2px 0 rgba(153,135,103,.35);
+}
+.claim-chip.fact{box-shadow:inset 0 -2px 0 rgba(93,210,181,.9)}
+.claim-chip.inference{box-shadow:inset 0 -2px 0 rgba(240,179,78,.9)}
+.claim-chip.hypothesis{box-shadow:inset 0 -2px 0 rgba(134,114,242,.9)}
+.claim-chip.contradicted{box-shadow:inset 0 -2px 0 rgba(239,127,140,.95)}
+.investigation-panel{
+  position:absolute;right:14px;top:56px;z-index:9;width:min(330px,38%);
+  max-height:calc(100% - 120px);overflow:auto;padding:10px 11px;border-radius:16px;
+  border:1px solid rgba(157,139,106,.5);background:rgba(248,241,222,.91);
+  box-shadow:0 12px 28px rgba(0,0,0,.10);backdrop-filter:blur(6px);
+}
+.investigation-panel h4{margin:0 0 8px;font-size:10px;text-transform:uppercase;letter-spacing:.14em;color:var(--muted)}
+.claim-card{
+  padding:9px 10px;margin-bottom:8px;border-radius:12px;background:rgba(255,255,255,.55);
+  border:1px solid rgba(171,155,121,.5)
+}
+.claim-card:last-child{margin-bottom:0}
+.claim-card .row{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.claim-card b{font-size:11px}
+.claim-card p{margin:5px 0 0;font-size:10px;line-height:1.4;color:var(--muted)}
+.claim-type{
+  font-size:8px;font-weight:900;letter-spacing:.1em;text-transform:uppercase;padding:3px 6px;border-radius:999px;
+  border:1px solid rgba(137,120,88,.45);background:rgba(255,255,255,.58)
+}
+.claim-type.FACT{box-shadow:inset 0 -2px 0 rgba(93,210,181,.9)}
+.claim-type.INFERENCE{box-shadow:inset 0 -2px 0 rgba(240,179,78,.9)}
+.claim-type.HYPOTHESIS{box-shadow:inset 0 -2px 0 rgba(134,114,242,.9)}
+.claim-type.CONTRADICTED{box-shadow:inset 0 -2px 0 rgba(239,127,140,.95)}
+.evidence-card{
+  padding:10px 11px;border-radius:13px;background:rgba(255,255,255,.48);
+  border:1px dashed rgba(162,145,111,.6);margin-top:8px
+}
+.evidence-card strong{display:block;font-size:10px;text-transform:uppercase;letter-spacing:.11em}
+.evidence-card p{margin:4px 0 0;font-size:11px;line-height:1.42;color:var(--muted)}
+
+@media(max-width:1000px){
+  body{overflow:auto}
+  .shell{position:relative;left:auto;top:auto;transform:none;width:100%;height:auto;min-height:100vh}
+  .page{position:relative;min-height:100vh}
+  .ui{padding-left:82px}
+  .workspace{grid-template-columns:1fr}
+  .reference{min-height:300px}
+  #playView{grid-template-rows:auto auto}
+  .editor-card{grid-template-columns:1fr}
+  #creatorView{grid-template-columns:1fr}
+  .preview-panel{min-height:650px}
+}
+</style>
+</head>
+<body>
+<div id="app">
+  <div class="desk"></div>
+  <div class="shell">
+    <div class="binding"><div class="ring"></div><div class="ring"></div><div class="ring"></div><div class="ring"></div><div class="ring"></div><div class="ring"></div></div>
+    <div class="page">
+      <div class="ui">
+        <div class="topbar">
+          <div class="mode-tabs">
+            <button class="btn active" id="playTab">Jugar</button>
+            <button class="btn" id="createTab">Crear nivel</button>
+          </div>
+
+          <div id="playTop" style="display:flex;align-items:center;gap:8px">
+            <select class="select" id="levelSelect"></select>
+            <button class="btn" id="targetBtn">Ver texto subyacente</button>
+            <label class="btn mint" style="display:inline-flex;align-items:center">
+              Importar JSON
+              <input id="importJson" type="file" accept=".json,application/json" hidden>
+            </label>
+          </div>
+
+          <div class="metrics" id="metrics">
+            <div class="metric"><b id="similarity">0%</b><span>similitud</span></div>
+            <div class="metric"><b id="score">0</b><span>puntaje actual</span></div>
+            <div class="metric"><b>∞</b><span>tiempo</span></div>
+          </div>
+        </div>
+
+        <section class="view active" id="playView">
+          <div class="workspace">
+            <aside class="reference">
+              <div>
+                <h3>Referencia objetivo</h3>
+                <div class="reference-sub">La forma está resuelta; la información visible depende de la dificultad.</div>
+                <div class="evidence-card">
+                  <strong>Evidencia disponible</strong>
+                  <p id="evidenceSummary">La evidencia del nivel sostiene una parte del grafo objetivo. Tus inferencias pueden ir más allá, pero quedarán diferenciadas.</p><div id="evidenceList"></div>
+                </div>
+              </div>
+              <svg id="targetSvg" viewBox="0 0 240 500" preserveAspectRatio="xMidYMid meet"></svg>
+              <div class="ref-note">El árbol grande representa solamente lo que expresa tu texto actual.</div>
+            </aside>
+
+            <main class="stage" id="stage">
+              <div class="stage-title">Tu interpretación · teoría del caso</div>
+              <div class="investigation-panel" id="investigationPanel">
+                <h4>Estado de la investigación</h4>
+                <div id="claimList"><div class="muted">Escribe una interpretación para construir afirmaciones.</div></div>
+              </div>
+              <div class="claim-strip" id="claimStrip"></div>
+              <div id="pixiHost"></div>
+              <div class="fallback" id="fallback">No se pudieron cargar PixiJS / ELK / GSAP desde CDN.</div>
+              <div class="zoom">
+                <button class="btn" id="zoomOut">−</button>
+                <span class="zoom-label" id="zoomLabel">120%</span>
+                <button class="btn" id="zoomIn">+</button>
+                <button class="btn" id="fitBtn">Fit</button>
+              </div>
+            </main>
+          </div>
+
+          <div class="editor-card">
+            <div class="writer">
+              <label>Escribe tu hipótesis</label>
+              <textarea id="editor" spellcheck="false" placeholder="Escribe una interpretación del árbol objetivo..."></textarea>
+            </div>
+            <div class="feedback">
+              <div class="feedback-title">Lectura semántica actual</div>
+              <div class="tokens" id="tokens"><span style="color:var(--muted)">Aún no hay conceptos detectados.</span></div>
+            </div>
+          </div>
+        </section>
+
+        <section class="view" id="creatorView">
+          <div class="creator-panel">
+            <div>
+              <h3>Generador de nivel</h3>
+              <div class="muted" style="margin-top:4px">Pega un texto. El generador crea nodos y relaciones provisionales que puedes corregir antes de jugar.</div>
+            </div>
+
+            <textarea id="creatorText" placeholder="Ej: El incendio destruyó el puente y obligó a los habitantes a evacuar el pueblo."></textarea>
+
+            <div class="creator-toolbar">
+              <select class="select" id="difficultySelect">
+                <option value="1">Fácil</option>
+                <option value="2" selected>Media</option>
+                <option value="3">Difícil</option>
+                <option value="4">Muy difícil</option>
+              </select>
+              <button class="btn primary" id="generateBtn">Generar nivel</button>
+              <button class="btn" id="addNodeBtn">+ Nodo</button>
+              <button class="btn" id="addEdgeBtn">+ Relación</button>
+            </div>
+
+            <div class="creator-help">
+              El generador distingue conceptos de operadores semánticos y equivalencias tipadas. Además, cada nivel guarda evidencia y provenance: lo visible se considera respaldado por la evidencia inicial; lo demás nace como inferencia o hipótesis.
+            </div>
+
+            <div class="creator-scroll">
+              <div class="section-head"><b>Nodos</b><span class="muted" id="nodeCount">0</span></div>
+              <div id="nodeEditor"></div>
+
+              <div class="section-head"><b>Relaciones</b><span class="muted" id="edgeCount">0</span></div>
+              <div id="edgeEditor"></div>
+            </div>
+
+            <div class="creator-actions">
+              <button class="btn" id="exportBtn">Exportar level.json</button>
+              <button class="btn mint" id="saveBtn">Guardar en navegador</button>
+              <button class="btn primary" id="playDraftBtn">Jugar este nivel</button>
+            </div>
+          </div>
+
+          <div class="preview-panel">
+            <div>
+              <h3>Grafo objetivo generado</h3>
+              <div class="muted" style="margin-top:4px">Los nodos y relaciones ocultos se ven atenuados. La referencia de partida usará esta misma estructura.</div>
+            </div>
+            <svg id="draftSvg" viewBox="0 0 900 620" preserveAspectRatio="xMidYMid meet"></svg>
+            <div class="creator-help">Puedes cambiar labels, alias, tipos, origen/destino, relación, visibilidad y puntos. La previsualización se actualiza en vivo.</div>
+          </div>
+        </section>
+      </div>
+    </div>
+  </div>
+
+  <div class="tooltip" id="tooltip"></div>
+
+  <div class="modal" id="modal">
+    <div class="modal-card">
+      <h2>Texto subyacente</h2>
+      <p id="targetText"></p>
+      <button class="btn" id="closeModal">Cerrar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(()=>{
+const COLORS=[0x8672f2,0x5dd2b5,0xf0b34e,0x78b7e8,0xef7f8c,0x9b8ee8];
+const RELATIONS=['RELATES_TO','CAUSES','AFFECTS','AGENT_OF','PURPOSE','PREVENTS','REQUIRES','BEFORE','AFTER','AT','HAS_PROPERTY'];
+const SEMANTIC_ROLES=['SUPPORT','ANCHOR','PIVOT','SETUP','FRAME','FRAME_SHIFT','PUNCHLINE','EXAGGERATION','CONTRAST'];
+const RELATION_PATTERNS={
+  HAS_PROPERTY:[
+    /\bes\b/,/\bera\b/,/\bparece\b/,/\bresulta\b/
+  ],
+  REQUIRES:[
+    /\bnecesit[a-zñ]*\b/,
+    /\brequier[a-zñ]*\b/,
+    /\bdebe(?:n)?\s+comprar\b/,
+    /\btiene(?:n)?\s+que\s+comprar\b/,
+    /\bhay\s+que\s+comprar\b/,
+    /\bdebe(?:n)?\s+adquirir\b/,
+    /\btiene(?:n)?\s+que\s+adquirir\b/,
+    /\bprecis[a-zñ]*\b/
+  ],
+  PURPOSE:[
+    /\bpara\b/,/\ba\s+fin\s+de\b/,/\bcon\s+el\s+fin\s+de\b/
+  ],
+  CAUSES:[
+    /\bcaus[a-zñ]*\b/,/\bprovoc[a-zñ]*\b/,/\boblig[a-zñ]*\b/,/\bdebido\b/,/\bporque\b/
+  ],
+  PREVENTS:[
+    /\bimpid[a-zñ]*\b/,/\bevit[a-zñ]*\b/,/\bbloque[a-zñ]*\b/
+  ],
+  BEFORE:[
+    /\bantes\b/
+  ],
+  AFTER:[
+    /\bdespues\b/,/\btras\b/,/\bposterior\b/,/\bmas\s+tarde\b/
+  ]
+};
+
+const OPERATOR_TOKENS=new Set([
+  'necesita','necesitan','necesitar','requiere','requieren','requerir',
+  'debe','deben','comprar','compra','compran','adquirir','adquiere','adquieren',
+  'tiene','tienen','precisa','precisan','precisar','obliga','obligo','obligó',
+  'impide','impidio','impidió','evita','evito','evitó','causa','causo','causó',
+  'provoca','provoco','provocó'
+].map(norm));
+
+function relationExpressionMatches(relation,text){
+  const t=norm(text);
+  const patterns=RELATION_PATTERNS[relation]||[];
+  return patterns.some(rx=>rx.test(t));
+}
+
+
+const BUILTINS=[
+{
+  id:'storm',
+  name:'Tormenta · Media',
+  difficulty:2,
+  targetText:'La tormenta inundó el terreno y obligó al alcalde a cancelar el festival para evitar accidentes.',
+  nodes:[
+    {id:'storm',label:'tormenta',type:'evento',visible:true,words:['tormenta','lluvia'],color:0x8672f2,points:70},
+    {id:'flood',label:'inundación',type:'estado',visible:true,words:['inundación','inundo','inundó','inundar'],color:0x5dd2b5,points:70},
+    {id:'ground',label:'terreno',type:'entidad',visible:true,words:['terreno','suelo','recinto'],color:0x78b7e8,points:45},
+    {id:'mayor',label:'alcalde',type:'actor',visible:false,words:['alcalde','autoridad'],color:0x8672f2,points:90},
+    {id:'cancel',label:'cancelación',type:'evento',visible:false,words:['cancelación','cancelar','canceló','suspender','suspendió'],color:0xf0b34e,points:110},
+    {id:'festival',label:'festival',type:'evento',visible:true,words:['festival','evento'],color:0x78b7e8,points:45},
+    {id:'avoid',label:'evitar',type:'propósito',visible:false,words:['evitar','prevenir'],color:0x5dd2b5,points:80},
+    {id:'accident',label:'accidentes',type:'riesgo',visible:false,words:['accidente','accidentes','riesgo','riesgos'],color:0xef7f8c,points:80}
+  ],
+  edges:[
+    {id:'e1',source:'storm',target:'flood',relation:'CAUSES',visible:true,points:100,cues:['caus','provoc','inund']},
+    {id:'e2',source:'flood',target:'ground',relation:'AFFECTS',visible:true,points:70,cues:[]},
+    {id:'e3',source:'flood',target:'cancel',relation:'CAUSES',visible:false,points:120,cues:['oblig','provoc','caus','por','debido']},
+    {id:'e4',source:'mayor',target:'cancel',relation:'AGENT_OF',visible:false,points:100,cues:[]},
+    {id:'e5',source:'cancel',target:'festival',relation:'AFFECTS',visible:true,points:90,cues:[]},
+    {id:'e6',source:'cancel',target:'avoid',relation:'PURPOSE',visible:false,points:100,cues:['para']},
+    {id:'e7',source:'avoid',target:'accident',relation:'AFFECTS',visible:false,points:80,cues:[]}
+  ]
+},
+{
+  id:'snow',
+  name:'Nieve · Media+',
+  difficulty:3,
+  targetText:'La nieve bloqueó la carretera e impidió que los turistas llegaran al refugio.',
+  nodes:[
+    {id:'snow',label:'nieve',type:'evento',visible:true,words:['nieve','nevada'],color:0x8672f2,points:70},
+    {id:'block',label:'bloqueo',type:'estado',visible:false,words:['bloqueo','bloqueó','bloquear'],color:0xf0b34e,points:100},
+    {id:'road',label:'carretera',type:'entidad',visible:true,words:['carretera','ruta','camino'],color:0x78b7e8,points:55},
+    {id:'tourists',label:'turistas',type:'actor',visible:false,words:['turistas','viajeros'],color:0x5dd2b5,points:80},
+    {id:'arrive',label:'llegada',type:'evento',visible:false,words:['llegada','llegar','llegaran','llegaron','arribar'],color:0x8672f2,points:95},
+    {id:'shelter',label:'refugio',type:'lugar',visible:true,words:['refugio','albergue'],color:0x78b7e8,points:55}
+  ],
+  edges:[
+    {id:'e1',source:'snow',target:'block',relation:'CAUSES',visible:true,points:110,cues:['bloque']},
+    {id:'e2',source:'block',target:'road',relation:'AFFECTS',visible:true,points:80,cues:[]},
+    {id:'e3',source:'block',target:'arrive',relation:'PREVENTS',visible:false,points:130,cues:['impid','evit','no pudo','no pudieron']},
+    {id:'e4',source:'tourists',target:'arrive',relation:'AGENT_OF',visible:false,points:90,cues:[]},
+    {id:'e5',source:'arrive',target:'shelter',relation:'AT',visible:true,points:80,cues:[]}
+  ]
+},
+{
+  id:'humor_zoo',
+  name:'Zoológico · Humor',
+  difficulty:3,
+  targetText:'Tu mama es tan fea que para ir al zoologico necesita dos boletos. Uno para entrar y otro para salir.',
+  nodes:[
+    {id:'mama',label:'mamá',type:'actor',semantic_role:'SETUP',salience:.72,visible:true,words:['mama','mamá','madre'],color:0x78b7e8,points:55},
+    {id:'fea',label:'fea',type:'propiedad',semantic_role:'ANCHOR',salience:1,visible:true,words:['fea','feo'],color:0x8672f2,points:90},
+    {id:'zoo',label:'zoológico',type:'lugar',semantic_role:'FRAME',salience:.66,visible:true,words:['zoologico','zoológico','zoo'],color:0x5dd2b5,points:55},
+    {id:'tickets',label:'dos boletos',type:'entidad',semantic_role:'EXAGGERATION',salience:.88,visible:false,words:['boletos','boleto','entradas','tickets'],color:0xf0b34e,points:100},
+    {id:'enter',label:'entrar',type:'evento',semantic_role:'PUNCHLINE',salience:.84,visible:false,words:['entrar','entrada','ingresar'],color:0x5dd2b5,points:85},
+    {id:'exit',label:'salir',type:'evento',semantic_role:'PUNCHLINE',salience:.96,visible:false,words:['salir','salida'],color:0xef7f8c,points:110}
+  ],
+  edges:[
+    {id:'e1',source:'mama',target:'fea',relation:'HAS_PROPERTY',visible:true,points:90,cues:[]},
+    {id:'e2',source:'fea',target:'zoo',relation:'RELATES_TO',visible:true,points:70,cues:[]},
+    {id:'e3',source:'zoo',target:'tickets',relation:'REQUIRES',visible:false,points:100,cues:['necesita','requiere','debe comprar','tiene que comprar']},
+    {id:'e4',source:'tickets',target:'enter',relation:'PURPOSE',visible:true,points:100,cues:['para','entrar']},
+    {id:'e5',source:'tickets',target:'exit',relation:'PURPOSE',visible:false,points:125,cues:['para','salir']}
+  ]
+},
+{
+  id:'station_case',
+  name:'Caso estación · Investigación',
+  difficulty:3,
+  targetText:'El vehículo A entró al estacionamiento a las 22:14, después del incidente registrado a las 22:08.',
+  evidence:[
+    {
+      id:'parking_log',
+      kind:'registro',
+      title:'Registro de acceso · 22:14',
+      description:'El sistema registra la entrada del vehículo A al estacionamiento a las 22:14.',
+      supports:['node:vehicle','node:enter','node:parking','node:t2214','edge:e1','edge:e2','edge:e3']
+    },
+    {
+      id:'camera_2208',
+      kind:'imagen',
+      title:'Cámara 02 · 22:08',
+      description:'Una captura registra el incidente seis minutos antes de la entrada del vehículo.',
+      supports:['node:incident','node:t2208','edge:e4']
+    }
+  ],
+  nodes:[
+    {id:'vehicle',label:'vehículo A',type:'entidad',semantic_role:'SETUP',salience:.72,visible:true,words:['vehículo a','vehiculo a','vehículo','vehiculo'],color:0x78b7e8,points:65},
+    {id:'enter',label:'entrada al estacionamiento',type:'evento',semantic_role:'SUPPORT',salience:.72,visible:true,words:['entró','entro','entrada','ingresó','ingreso','llegó','llego'],color:0x5dd2b5,points:75},
+    {id:'parking',label:'estacionamiento',type:'lugar',semantic_role:'FRAME',salience:.66,visible:true,words:['estacionamiento','parking'],color:0x8672f2,points:55},
+    {id:'t2214',label:'22:14',type:'tiempo',semantic_role:'SUPPORT',salience:.86,visible:true,words:['22:14','22.14'],color:0xf0b34e,points:85},
+    {id:'incident',label:'incidente',type:'evento',semantic_role:'ANCHOR',salience:1,visible:true,words:['incidente','hecho','suceso'],color:0xef7f8c,points:95},
+    {id:'t2208',label:'22:08',type:'tiempo',semantic_role:'SUPPORT',salience:.9,visible:true,words:['22:08','22.08'],color:0xf0b34e,points:90}
+  ],
+  edges:[
+    {id:'e1',source:'vehicle',target:'enter',relation:'AGENT_OF',visible:true,points:80,cues:[]},
+    {id:'e2',source:'enter',target:'parking',relation:'AT',visible:true,points:70,cues:[]},
+    {id:'e3',source:'enter',target:'t2214',relation:'AT',visible:true,points:85,cues:[]},
+    {id:'e4',source:'incident',target:'t2208',relation:'AT',visible:true,points:85,cues:[]},
+    {id:'e5',source:'enter',target:'incident',relation:'AFTER',visible:false,points:135,cues:['después','despues','posterior','más tarde','mas tarde']}
+  ]
+}
+];
+
+for(const builtin of BUILTINS){
+  builtin.nodes.forEach((n,i)=>{
+    if(!n.semantic_role)n.semantic_role=i===0?'SETUP':(i===builtin.nodes.length-1?'PUNCHLINE':'SUPPORT');
+    if(n.salience==null)n.salience=n.semantic_role==='PUNCHLINE'?.82:(n.semantic_role==='SETUP'?.68:.55);
+  });
+}
+
+const CLAIM_TYPES={
+  EVIDENCE:'EVIDENCE',
+  FACT:'FACT',
+  INFERENCE:'INFERENCE',
+  HYPOTHESIS:'HYPOTHESIS',
+  CONTRADICTED:'CONTRADICTED'
+};
+
+function normalizeEvidence(lvl){
+  if(!Array.isArray(lvl.evidence)){
+    lvl.evidence=[{
+      id:`${lvl.id}_evidence_1`,
+      kind:'reference',
+      title:'Referencia del nivel',
+      description:'La referencia visible del nivel constituye la evidencia inicial.',
+      supports:[
+        ...lvl.nodes.filter(n=>n.visible).map(n=>`node:${n.id}`),
+        ...lvl.edges.filter(e=>e.visible).map(e=>`edge:${e.id}`)
+      ]
+    }];
+  }
+  return lvl;
+}
+
+function evidenceSupports(ref,lvl=level){
+  const ids=new Set();
+  for(const ev of (lvl.evidence||[])){
+    if((ev.supports||[]).includes(ref))ids.add(ev.id);
+  }
+  return [...ids];
+}
+
+function classifyNodeClaim(n,text){
+  const provenance=evidenceSupports(`node:${n.id}`);
+  if(provenance.length)return {type:CLAIM_TYPES.FACT,confidence:.95,supported_by:provenance,contradicted_by:[]};
+  if(n.semantic_role==='ANCHOR'||n.semantic_role==='FRAME'||n.semantic_role==='SETUP')
+    return {type:CLAIM_TYPES.INFERENCE,confidence:.72,supported_by:[],contradicted_by:[]};
+  return {type:CLAIM_TYPES.HYPOTHESIS,confidence:.58,supported_by:[],contradicted_by:[]};
+}
+
+function classifyEdgeClaim(e,text){
+  const provenance=evidenceSupports(`edge:${e.id}`);
+  if(provenance.length)return {type:CLAIM_TYPES.FACT,confidence:.96,supported_by:provenance,contradicted_by:[]};
+
+  const explicit=relationExpressionMatches(e.relation,text) || (e.cues||[]).some(c=>norm(text).includes(norm(c)));
+  return explicit
+    ? {type:CLAIM_TYPES.INFERENCE,confidence:.76,supported_by:[],contradicted_by:[]}
+    : {type:CLAIM_TYPES.HYPOTHESIS,confidence:.56,supported_by:[],contradicted_by:[]};
+}
+
+function buildClaims(text){
+  const claims=[];
+  for(const n of level.nodes){
+    if(!hasNode(text,n))continue;
+    const meta=classifyNodeClaim(n,text);
+    claims.push({
+      id:`node:${n.id}`,kind:'node',label:n.label,semantic_role:n.semantic_role||'SUPPORT',
+      ...meta
+    });
+  }
+  for(const e of level.edges){
+    if(!edgeSatisfied(e,text))continue;
+    const a=nodeById(e.source),b=nodeById(e.target);
+    if(!a||!b)continue;
+    const meta=classifyEdgeClaim(e,text);
+    claims.push({
+      id:`edge:${e.id}`,kind:'edge',
+      label:`${a.label} → ${e.relation} → ${b.label}`,
+      semantic_role:'RELATION',
+      ...meta
+    });
+  }
+
+  // Detect simple internal contradictions against known target chronology/relations.
+  const nt=norm(text);
+  for(const e of level.edges){
+    if(e.relation==='BEFORE' && relationExpressionMatches('AFTER',text)){
+      const a=nodeById(e.source),b=nodeById(e.target);
+      if(a&&b&&hasNode(text,a)&&hasNode(text,b)){
+        claims.push({
+          id:`contradiction:${e.id}`,kind:'edge',label:`${a.label} ↔ ${b.label}`,
+          semantic_role:'CONTRADICTION',type:CLAIM_TYPES.CONTRADICTED,confidence:1,
+          supported_by:[],contradicted_by:evidenceSupports(`edge:${e.id}`)
+        });
+      }
+    }
+    if(e.relation==='AFTER' && relationExpressionMatches('BEFORE',text)){
+      const a=nodeById(e.source),b=nodeById(e.target);
+      if(a&&b&&hasNode(text,a)&&hasNode(text,b)){
+        claims.push({
+          id:`contradiction:${e.id}`,kind:'edge',label:`${a.label} ↔ ${b.label}`,
+          semantic_role:'CONTRADICTION',type:CLAIM_TYPES.CONTRADICTED,confidence:1,
+          supported_by:[],contradicted_by:evidenceSupports(`edge:${e.id}`)
+        });
+      }
+    }
+  }
+  return claims;
+}
+
+function claimStats(claims){
+  const out={FACT:0,INFERENCE:0,HYPOTHESIS:0,CONTRADICTED:0};
+  for(const c of claims)if(out[c.type]!=null)out[c.type]++;
+  return out;
+}
+
+let LEVELS=[...BUILTINS].map(normalizeEvidence);
+let level=LEVELS[0];
+let draft=null;
+let pixi=null,elk=null,root=null,nodeViews=new Map(),edgeViews=new Map(),positions=new Map();
+let fitScale=1,zoom=1.2,panX=0,panY=0,dragging=false,dragOrigin=null,lastGraphKey='';
+
+const $=q=>document.querySelector(q);
+const playTab=$('#playTab'),createTab=$('#createTab'),playView=$('#playView'),creatorView=$('#creatorView');
+const playTop=$('#playTop'),metrics=$('#metrics'),levelSelect=$('#levelSelect');
+const targetBtn=$('#targetBtn'),targetSvg=$('#targetSvg'),draftSvg=$('#draftSvg');
+const stage=$('#stage'),pixiHost=$('#pixiHost'),fallback=$('#fallback'),editor=$('#editor'),tokens=$('#tokens');
+const simEl=$('#similarity'),scoreEl=$('#score'),tooltip=$('#tooltip');
+const modal=$('#modal'),targetTextEl=$('#targetText');
+const creatorText=$('#creatorText'),difficultySelect=$('#difficultySelect');
+const nodeEditor=$('#nodeEditor'),edgeEditor=$('#edgeEditor'),nodeCount=$('#nodeCount'),edgeCount=$('#edgeCount');
+
+function norm(s){return (s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'')}
+function esc(s){return String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
+function slug(s){
+  return norm(s).replace(/[^a-z0-9ñ]+/g,'_').replace(/^_+|_+$/g,'').slice(0,34)||'node';
+}
+function uniqueId(base,used){
+  let x=base||'node',i=2;while(used.has(x)){x=(base||'node')+'_'+i++;}used.add(x);return x;
+}
+function deepCopy(x){return JSON.parse(JSON.stringify(x))}
+function nodeById(id,lvl=level){return lvl.nodes.find(n=>n.id===id)}
+
+// Equivalences are typed. A surface form can legitimately belong to two
+// meanings ("entrada" = ticket / act of entering), but it must never leak
+// automatically from one semantic type to another.
+const TYPED_CONCEPT_EQUIVALENTS=[
+  {
+    types:['entidad'],
+    anchors:['boleto','boletos','ticket','tickets'],
+    forms:['boleto','boletos','entrada','entradas','ticket','tickets','pase','pases']
+  },
+  {
+    types:['lugar'],
+    anchors:['zoologico','zoo'],
+    forms:['zoologico','zoo','parque zoologico']
+  },
+  {
+    types:['actor'],
+    anchors:['mama','madre'],
+    forms:['mama','madre']
+  },
+  {
+    types:['evento'],
+    anchors:['entrar','ingresar','acceder'],
+    forms:['entrar','ingresar','acceder']
+  },
+  {
+    types:['evento'],
+    anchors:['salir','retirarse','egresar'],
+    forms:['salir','retirarse','egresar']
+  }
+];
+
+// These nouns are context-sensitive when they are used to express an event.
+// They are intentionally excluded from ordinary event aliases so that
+// "dos entradas" cannot activate the event ENTER.
+const AMBIGUOUS_EVENT_NOMINALS=new Set(['entrada','entradas','ingreso','ingresos','salida','salidas']);
+
+function conceptForms(n){
+  const nodeType=norm(n.type||'');
+  const raw=[norm(n.label),...(n.words||[]).map(norm)].map(x=>x.trim()).filter(Boolean);
+
+  // Explicit aliases remain authoritative except ambiguous event nominalizations.
+  const forms=new Set(
+    raw.filter(x=>!(nodeType==='evento' && AMBIGUOUS_EVENT_NOMINALS.has(x)))
+  );
+
+  for(const group of TYPED_CONCEPT_EQUIVALENTS){
+    if(!group.types.includes(nodeType))continue;
+    const belongs=raw.some(item=>
+      group.anchors.some(a=>item===norm(a)) ||
+      group.anchors.some(a=>item.includes(norm(a)))
+    );
+    if(belongs)group.forms.forEach(v=>forms.add(norm(v)));
+  }
+  return [...forms];
+}
+
+function contextualConceptMatch(text,n){
+  if(norm(n.type)!=='evento')return false;
+  const t=' '+norm(text).replace(/[^a-z0-9ñ]+/g,' ')+' ';
+  const label=norm(n.label);
+
+  // Nominal event readings are accepted only with contextual syntax.
+  // "para la entrada" -> ENTER, while "dos entradas" -> ticket only.
+  if(['entrar','entrada','ingresar','ingreso','acceder'].some(x=>label.includes(x))){
+    return /\bpara\s+(?:la\s+)?entrada\b/.test(t) ||
+           /\bpara\s+(?:el\s+)?ingreso\b/.test(t) ||
+           /\bal\s+entrar\b/.test(t) ||
+           /\bal\s+ingresar\b/.test(t);
+  }
+  if(['salir','salida','retirarse','egresar'].some(x=>label.includes(x))){
+    return /\bpara\s+(?:la\s+)?salida\b/.test(t) ||
+           /\bal\s+salir\b/.test(t) ||
+           /\bpara\s+retirarse\b/.test(t);
+  }
+  return false;
+}
+
+function hasNode(text,n){
+  const raw=norm(text);
+  const tokenized=' '+raw.replace(/[^a-z0-9ñ]+/g,' ')+' ';
+  const direct=conceptForms(n).some(q=>{
+    if(!q)return false;
+    if(q.includes(' '))return raw.includes(q);
+    return tokenized.includes(' '+q+' ');
+  });
+  return direct || contextualConceptMatch(text,n);
+}
+function edgeSatisfied(edge,text,lvl=level){
+  const a=nodeById(edge.source,lvl),b=nodeById(edge.target,lvl);
+  if(!a||!b||!hasNode(text,a)||!hasNode(text,b))return false;
+
+  // Structural relations can be accepted from the presence of both endpoint concepts.
+  if(edge.relation==='RELATES_TO'||edge.relation==='AFFECTS'||edge.relation==='AGENT_OF'||edge.relation==='AT')return true;
+
+  // Canonical semantic operators accept paraphrases, not only the target wording.
+  if(edge.relation==='HAS_PROPERTY'){
+    return relationExpressionMatches('HAS_PROPERTY',text) || (a.type==='actor' && b.type==='propiedad');
+  }
+  if(['REQUIRES','PURPOSE','CAUSES','PREVENTS','BEFORE','AFTER'].includes(edge.relation)){
+    if(relationExpressionMatches(edge.relation,text))return true;
+  }
+
+  // Legacy/custom level cues remain supported as a fallback.
+  const t=norm(text),cues=edge.cues||[];
+  if(cues.length===0)return true;
+  return cues.some(c=>t.includes(norm(c)));
+}
+function nodeSalience(n){
+  const v=Number(n?.salience);
+  return Number.isFinite(v)?Math.max(.1,Math.min(1,v)):.55;
+}
+function roleMultiplier(role){
+  return ({
+    ANCHOR:1.25,
+    PIVOT:1.35,
+    PUNCHLINE:1.25,
+    FRAME_SHIFT:1.20,
+    EXAGGERATION:1.15,
+    CONTRAST:1.12,
+    SETUP:1.05,
+    FRAME:1.00,
+    SUPPORT:.88
+  })[role]||1;
+}
+function effectiveNodePoints(n){
+  return Math.round(Number(n.points||0) * (.45 + nodeSalience(n)) * roleMultiplier(n.semantic_role));
+}
+function edgeWeight(e,lvl=level){
+  const a=nodeById(e.source,lvl),b=nodeById(e.target,lvl);
+  const sal=((a?nodeSalience(a):.5)+(b?nodeSalience(b):.5))/2;
+  return .55+sal;
+}
+function calcSimilarity(text){
+  if(!text.trim())return 0;
+  const totalConceptWeight=level.nodes.reduce((s,n)=>s+nodeSalience(n)*roleMultiplier(n.semantic_role),0)||1;
+  const hitConceptWeight=level.nodes.filter(n=>hasNode(text,n)).reduce((s,n)=>s+nodeSalience(n)*roleMultiplier(n.semantic_role),0);
+  const totalEdgeWeight=level.edges.reduce((s,e)=>s+edgeWeight(e),0)||1;
+  const hitEdgeWeight=level.edges.filter(e=>edgeSatisfied(e,text)).reduce((s,e)=>s+edgeWeight(e),0);
+  const concept=hitConceptWeight/totalConceptWeight;
+  const rel=hitEdgeWeight/totalEdgeWeight;
+  const canonicalLex=s=>{
+    let x=' '+norm(s)+' ';
+    x=x.replace(/\b(debe|deben)\s+comprar\b/g,' requiere ');
+    x=x.replace(/\btiene(n)?\s+que\s+comprar\b/g,' requiere ');
+    x=x.replace(/\bnecesit[a-zñ]*\b/g,' requiere ');
+    x=x.replace(/\brequier[a-zñ]*\b/g,' requiere ');
+    x=x.replace(/\bentradas?\b/g,' boleto ');
+    x=x.replace(/\btickets?\b/g,' boleto ');
+    return x;
+  };
+  const tw=new Set(canonicalLex(level.targetText).split(/\W+/).filter(w=>w.length>3));
+  const cw=new Set(canonicalLex(text).split(/\W+/).filter(w=>w.length>3));
+  let ov=0;for(const w of cw)if(tw.has(w))ov++;
+  const lex=tw.size?ov/tw.size:0;
+  return Math.min(1,.58*concept+.34*rel+.08*lex);
+}
+function currentScore(text){
+  let s=0;
+  for(const n of level.nodes)if(hasNode(text,n))s+=effectiveNodePoints(n);
+  for(const e of level.edges)if(edgeSatisfied(e,text))s+=Math.round(Number(e.points||0)*edgeWeight(e));
+  return s;
+}
+
+function relationColor(r){
+  if(r==='CAUSES'||r==='PREVENTS')return 0xf0b34e;
+  if(r==='PURPOSE')return 0x5dd2b5;
+  if(r==='AGENT_OF')return 0x8672f2;
+  if(r==='BEFORE'||r==='AFTER')return 0xef7f8c;
+  return 0x9a8c70;
+}
+
+async function initPixi(){
+  if(!window.PIXI||!window.ELK||!window.gsap){fallback.style.display='grid';return false}
+  try{
+    pixi=new PIXI.Application();
+    await pixi.init({resizeTo:pixiHost,antialias:true,backgroundAlpha:0,resolution:Math.min(devicePixelRatio||1,2),autoDensity:true});
+    pixiHost.appendChild(pixi.canvas);
+    elk=new ELK();
+    return true;
+  }catch(err){console.error(err);fallback.style.display='grid';return false}
+}
+
+function candidateData(text){
+  const nodes=level.nodes.filter(n=>hasNode(text,n));
+  const ids=new Set(nodes.map(n=>n.id));
+  const edges=level.edges.filter(e=>ids.has(e.source)&&ids.has(e.target)&&edgeSatisfied(e,text));
+  return {nodes,edges};
+}
+function cubicPoint(p0,p1,p2,p3,t){const u=1-t;return u*u*u*p0+3*u*u*t*p1+3*u*t*t*p2+t*t*t*p3}
+function geom(a,b){
+  const y1=a.y+14,y2=b.y-22,mid=(y1+y2)/2,t=.94;
+  return {y1,y2,mid,tip:{x:b.x,y:y2},prev:{x:cubicPoint(a.x,a.x,b.x,b.x,t),y:cubicPoint(y1,mid,mid,y2,t)}};
+}
+function arrow(g,tip,prev,color,alpha,size=10){
+  const ang=Math.atan2(tip.y-prev.y,tip.x-prev.x),sp=.56;
+  const l={x:tip.x-Math.cos(ang-sp)*size,y:tip.y-Math.sin(ang-sp)*size};
+  const r={x:tip.x-Math.cos(ang+sp)*size,y:tip.y-Math.sin(ang+sp)*size};
+  g.poly([tip.x,tip.y,l.x,l.y,r.x,r.y]).fill({color,alpha});
+}
+function makeNodeView(n,parent,claim){
+  const p=positions.get(n.id),c=new PIXI.Container();c.x=p.x;c.y=p.y;parent.addChild(c);
+  const sal=nodeSalience(n),radius=14+sal*4,haloR=radius+7; const claimType=claim?.type||'HYPOTHESIS';
+  const halo=new PIXI.Graphics().circle(0,-4,haloR).fill({color:n.color||0x8672f2,alpha:0});
+  const ringColor=claimType==='FACT'?0x5dd2b5:(claimType==='INFERENCE'?0xf0b34e:(claimType==='CONTRADICTED'?0xef7f8c:(n.color||0x8672f2)));
+  const ring=new PIXI.Graphics().circle(0,-4,radius).fill({color:0xfaf5e8,alpha:1}).stroke({width:1.8+sal*1.5,color:ringColor,alpha:.95});
+  const dot=new PIXI.Graphics().circle(0,-4,5+sal*2).fill({color:n.color||0x8672f2,alpha:.96});
+  const label=new PIXI.Text({text:n.label,style:{fontFamily:'Arial,sans-serif',fontSize:14+sal*2,fontWeight:'700',fill:0x342f28,align:'center'}});
+  label.anchor.set(.5,0);label.y=22;
+  const role=`${(n.semantic_role||'SUPPORT').replace('_',' ')} · ${claimType}`;
+  const type=new PIXI.Text({text:`${(n.type||'concepto').toUpperCase()} · ${role}`,style:{fontFamily:'Arial,sans-serif',fontSize:8,fontWeight:'700',letterSpacing:.8,fill:0x867d6e}});
+  type.anchor.set(.5,0);type.y=43;
+  c.addChild(halo,ring,dot,label,type);nodeViews.set(n.id,{c,halo});
+}
+function makeEdgeView(e,parent,claim){
+  const a=positions.get(e.source),b=positions.get(e.target);if(!a||!b)return;
+  const g=new PIXI.Graphics(),gg=geom(a,b);
+  const color=claim?.type==='FACT'?0x5dd2b5:(claim?.type==='INFERENCE'?0xf0b34e:(claim?.type==='CONTRADICTED'?0xef7f8c:relationColor(e.relation)));
+  g.moveTo(a.x,gg.y1).bezierCurveTo(a.x,gg.mid,b.x,gg.mid,b.x,gg.y2).stroke({width:3,color,alpha:.72,cap:'round'});
+  arrow(g,gg.tip,gg.prev,color,.8,10);parent.addChild(g);
+  const label=new PIXI.Text({text:e.relation,style:{fontFamily:'Arial,sans-serif',fontSize:8,fontWeight:'700',letterSpacing:1,fill:0x796e59}});
+  label.anchor.set(.5);label.x=(a.x+b.x)/2;label.y=gg.mid-4;parent.addChild(label);edgeViews.set(e.id,{g,label});
+}
+async function renderCandidateGraph(text,animate=true,claims=buildClaims(text)){
+  if(!pixi||!elk)return;
+  const gd=candidateData(text);
+  const key=JSON.stringify({n:gd.nodes.map(n=>n.id).sort(),e:gd.edges.map(e=>e.id).sort()});
+  if(key===lastGraphKey)return;
+  lastGraphKey=key;
+  pixi.stage.removeChildren();nodeViews.clear();edgeViews.clear();positions.clear();
+  if(!gd.nodes.length){root=null;return}
+  const graph={
+    id:'root',
+    layoutOptions:{
+      'elk.algorithm':'layered','elk.direction':'DOWN','elk.spacing.nodeNode':'56',
+      'elk.layered.spacing.nodeNodeBetweenLayers':'86','elk.padding':'[top=55,left=55,bottom=55,right=55]'
+    },
+    children:gd.nodes.map(n=>({id:n.id,width:138,height:66})),
+    edges:gd.edges.map(e=>({id:e.id,sources:[e.source],targets:[e.target]}))
+  };
+  const out=await elk.layout(graph);
+  root=new PIXI.Container();pixi.stage.addChild(root);
+  const edgeLayer=new PIXI.Container(),nodeLayer=new PIXI.Container();root.addChild(edgeLayer,nodeLayer);
+  for(const n of out.children||[])positions.set(n.id,{x:n.x+n.width/2,y:n.y+n.height/2});
+  const xs=[...positions.values()].map(p=>p.x),ys=[...positions.values()].map(p=>p.y);
+  root.layoutW=Math.max(...xs,420)+100;root.layoutH=Math.max(...ys,340)+100;
+  const claimMap=new Map(claims.map(c=>[c.id,c]));
+  for(const e of gd.edges)makeEdgeView(e,edgeLayer,claimMap.get('edge:'+e.id));
+  for(const n of gd.nodes)makeNodeView(n,nodeLayer,claimMap.get('node:'+n.id));
+  fitScale=Math.min((pixiHost.clientWidth-70)/root.layoutW,(pixiHost.clientHeight-70)/root.layoutH,1.65);
+  applyView();
+  if(animate){
+    for(const v of nodeViews.values()){
+      v.c.alpha=0;v.c.scale.set(.72);
+      gsap.to(v.c,{alpha:1,duration:.22});
+      gsap.to(v.c.scale,{x:1,y:1,duration:.36,ease:'back.out(1.7)'});
+      gsap.fromTo(v.halo,{alpha:.30},{alpha:0,duration:.62});
+    }
+  }
+}
+function applyView(){
+  if(!root)return;
+  const s=fitScale*zoom;root.scale.set(s);
+  root.x=(pixiHost.clientWidth-root.layoutW*s)/2+panX;
+  root.y=(pixiHost.clientHeight-root.layoutH*s)/2+panY+15;
+  $('#zoomLabel').textContent=Math.round(zoom*100)+'%';
+}
+function setZoom(z){zoom=Math.max(.65,Math.min(2.8,z));applyView()}
+function fit(){zoom=1;panX=0;panY=0;applyView()}
+
+async function renderSvgGraph(svg,lvl,{large=false}={}){
+  if(!elk||!lvl||!lvl.nodes?.length){svg.innerHTML='';return}
+  const graph={
+    id:'root',
+    layoutOptions:{
+      'elk.algorithm':'layered','elk.direction':'DOWN',
+      'elk.spacing.nodeNode':large?'42':'18',
+      'elk.layered.spacing.nodeNodeBetweenLayers':large?'68':'36',
+      'elk.padding':'[top=20,left=20,bottom=20,right=20]'
+    },
+    children:lvl.nodes.map(n=>({id:n.id,width:large?120:62,height:large?54:32})),
+    edges:lvl.edges.map(e=>({id:e.id,sources:[e.source],targets:[e.target]}))
+  };
+  const out=await elk.layout(graph),pos=new Map();
+  for(const n of out.children||[])pos.set(n.id,{x:n.x+n.width/2,y:n.y+n.height/2});
+  const xs=[...pos.values()].map(p=>p.x),ys=[...pos.values()].map(p=>p.y);
+  const maxX=Math.max(...xs,220)+(large?100:28),maxY=Math.max(...ys,360)+(large?100:28);
+  svg.setAttribute('viewBox',`0 0 ${maxX} ${maxY}`);svg.innerHTML='';
+  const NS='http://www.w3.org/2000/svg';
+
+  for(const e of lvl.edges){
+    const a=pos.get(e.source),b=pos.get(e.target);if(!a||!b)continue;
+    const visible=e.visible!==false,mid=(a.y+b.y)/2,color=visible?'#8e7e61':'#bbb09a';
+    const path=document.createElementNS(NS,'path');
+    path.setAttribute('d',`M ${a.x} ${a.y+(large?16:10)} C ${a.x} ${mid}, ${b.x} ${mid}, ${b.x} ${b.y-(large?20:14)}`);
+    path.setAttribute('fill','none');path.setAttribute('stroke',color);path.setAttribute('stroke-width',visible?(large?'2.4':'2'):'1.3');path.setAttribute('opacity',visible?'.78':'.35');svg.appendChild(path);
+    const tip=document.createElementNS(NS,'polygon');const sz=large?6:4;const ty=b.y-(large?20:14);
+    tip.setAttribute('points',`${b.x},${ty} ${b.x-sz},${ty-sz*1.7} ${b.x+sz},${ty-sz*1.7}`);
+    tip.setAttribute('fill',color);tip.setAttribute('opacity',visible?'.78':'.35');svg.appendChild(tip);
+    if(large){
+      const tx=document.createElementNS(NS,'text');tx.setAttribute('x',(a.x+b.x)/2);tx.setAttribute('y',mid-5);tx.setAttribute('text-anchor','middle');tx.setAttribute('font-size','9');tx.setAttribute('font-weight','700');tx.setAttribute('fill','#756a56');tx.textContent=e.relation;svg.appendChild(tx);
+    }
+  }
+
+  for(const n of lvl.nodes){
+    const p=pos.get(n.id),visible=n.visible!==false;
+    const g=document.createElementNS(NS,'g');
+    const c=document.createElementNS(NS,'circle');c.setAttribute('cx',p.x);c.setAttribute('cy',p.y);c.setAttribute('r',large?'14':'9');c.setAttribute('fill',visible?'#faf5e8':'#eee6d5');c.setAttribute('stroke',visible?'#766b58':'#b8ad96');c.setAttribute('stroke-width',visible?'2':'1.4');g.appendChild(c);
+    const dot=document.createElementNS(NS,'circle');dot.setAttribute('cx',p.x);dot.setAttribute('cy',p.y);dot.setAttribute('r',large?'5':'3.5');dot.setAttribute('fill',visible?'#8672f2':'#c4b9a2');g.appendChild(dot);
+    const tx=document.createElementNS(NS,'text');tx.setAttribute('x',p.x);tx.setAttribute('y',p.y+(large?33:23));tx.setAttribute('text-anchor','middle');tx.setAttribute('font-size',large?'12':'9');tx.setAttribute('font-weight','700');tx.setAttribute('fill',visible?'#3e382f':'#a19887');tx.textContent=visible?n.label:'?';g.appendChild(tx);
+    if(large){
+      const ty=document.createElementNS(NS,'text');ty.setAttribute('x',p.x);ty.setAttribute('y',p.y+46);ty.setAttribute('text-anchor','middle');ty.setAttribute('font-size','8');ty.setAttribute('fill','#8b8273');ty.textContent=`${(n.type||'concepto').toUpperCase()} · ${n.semantic_role||'SUPPORT'} · ${nodeSalience(n).toFixed(2)}`;g.appendChild(ty);
+    }
+    svg.appendChild(g);
+  }
+}
+
+function updatePlay(text){
+  simEl.textContent=Math.round(calcSimilarity(text)*100)+'%';
+  scoreEl.textContent=currentScore(text).toLocaleString('es-CL');
+  renderTokens(text);
+  const claims=buildClaims(text);
+  renderClaims(claims);
+  renderCandidateGraph(text,true,claims);
+}
+
+function renderClaims(claims){
+  const list=$('#claimList'),strip=$('#claimStrip');
+  if(!claims.length){
+    list.innerHTML='<div class="muted">Escribe una interpretación para construir afirmaciones.</div>';
+    strip.innerHTML='';
+    return;
+  }
+  const stats=claimStats(claims);
+  strip.innerHTML=[
+    stats.FACT?`<span class="claim-chip fact">${stats.FACT} hechos</span>`:'',
+    stats.INFERENCE?`<span class="claim-chip inference">${stats.INFERENCE} inferencias</span>`:'',
+    stats.HYPOTHESIS?`<span class="claim-chip hypothesis">${stats.HYPOTHESIS} hipótesis</span>`:'',
+    stats.CONTRADICTED?`<span class="claim-chip contradicted">${stats.CONTRADICTED} contradicciones</span>`:''
+  ].join('');
+
+  list.innerHTML=claims.slice(0,12).map(c=>{
+    const support=(c.supported_by||[]).length
+      ? `Sostenido por: ${(c.supported_by||[]).join(', ')}`
+      : 'Sin evidencia directa; depende de tu interpretación.';
+    const contra=(c.contradicted_by||[]).length
+      ? `<br>Contradicho por: ${(c.contradicted_by||[]).join(', ')}`
+      : '';
+    return `<div class="claim-card">
+      <div class="row">
+        <b>${esc(c.label)}</b>
+        <span class="claim-type ${esc(c.type)}">${esc(c.type)}</span>
+      </div>
+      <p>Confianza ${(c.confidence*100).toFixed(0)}% · ${esc(support)}${contra}</p>
+    </div>`;
+  }).join('');
+}
+
+function renderTokens(text){
+  if(!text.trim()){tokens.innerHTML='<span style="color:var(--muted)">Aún no hay conceptos detectados.</span>';return}
+  const parts=text.split(/(\s+|[.,;:!?¿¡]+)/);
+  tokens.innerHTML=parts.map(part=>{
+    const clean=norm(part).replace(/[^a-z0-9ñ]/g,'');if(!clean)return esc(part);
+    const n=level.nodes.find(x=>(x.words||[x.label]).some(w=>norm(w).replace(/[^a-z0-9ñ]/g,'')===clean));
+    if(!n)return esc(part);
+    const cls=n.visible?'soft':'strong';
+    const reason=n.visible?'Coincide con evidencia visible del objetivo.':'Reconstruye un concepto oculto del nivel.';
+    const role=n.semantic_role||'SUPPORT',sal=nodeSalience(n),weighted=effectiveNodePoints(n);
+    return `<span class="tok ${cls}" data-tip="${esc(n.label)}" data-extra="${esc(reason)} · ${role} · salience ${sal.toFixed(2)} · ${weighted} pts efectivos">${esc(part)}</span>`;
+  }).join('');
+}
+
+async function loadLevel(indexOrLevel){
+  level=typeof indexOrLevel==='number'?LEVELS[indexOrLevel]:indexOrLevel;
+  editor.value='';lastGraphKey='';simEl.textContent='0%';scoreEl.textContent='0';
+  tokens.innerHTML='<span style="color:var(--muted)">Aún no hay conceptos detectados.</span>';
+  if(pixi)pixi.stage.removeChildren();root=null;zoom=1.2;panX=0;panY=0;
+  normalizeEvidence(level);
+  await renderSvgGraph(targetSvg,level,{large:false});
+  targetTextEl.textContent=level.targetText;
+  const ev=level.evidence||[];
+  $('#evidenceSummary').textContent=ev.length
+    ? `${ev.length} pieza${ev.length===1?'':'s'} de evidencia disponible${ev.length===1?'':'s'}.`
+    : 'Sin evidencia declarada.';
+  $('#evidenceList').innerHTML=ev.map(x=>`
+    <div style="margin-top:8px;padding-top:7px;border-top:1px dashed rgba(162,145,111,.42)">
+      <strong style="font-size:9px">${esc(x.title||x.id)}</strong>
+      <p style="margin:3px 0 0;font-size:10px;line-height:1.35">${esc(x.description||'')}</p>
+    </div>`).join('');
+  renderClaims([]);
+  levelSelect.value=String(LEVELS.indexOf(level));
+}
+function refreshLevelSelect(){
+  levelSelect.innerHTML='';
+  LEVELS.forEach((l,i)=>{
+    const o=document.createElement('option');o.value=i;o.textContent=l.name||`${l.id} · Nivel`;levelSelect.appendChild(o);
+  });
+}
+function validateLevel(l){
+  if(!l||!Array.isArray(l.nodes)||!Array.isArray(l.edges)||!l.targetText)throw new Error('El JSON necesita targetText, nodes[] y edges[].'); normalizeEvidence(l);
+  const ids=new Set(l.nodes.map(n=>n.id));
+  for(const e of l.edges)if(!ids.has(e.source)||!ids.has(e.target))throw new Error(`La relación ${e.id} referencia un nodo inexistente.`);
+  return true;
+}
+
+/* ---------- GENERADOR HEURÍSTICO ---------- */
+const STOP=new Set(('la el los las un una unos unas de del al y e o u que se su sus en con por para a ante bajo desde durante entre hacia hasta mediante sobre tras como pero si no ya muy mas más fue era es son ser estar ha han habia había hubo lo le les me te nos mi tu este esta estos estas ese esa esos esas aquel aquella cada todo toda todos todas algun algún alguna mismo misma otro otra otros otras').split(/\s+/).map(norm));
+const AUX=new Set(('haber tener poder deber hacer decir ir venir poner dar ver saber querer quedar llegar pasar volver seguir empezar terminar resultar permitir mantener ocurrir parecer encontrar usar llevar tomar').split(/\s+/).map(norm));
+const VERB_HINTS=['ó','aron','ieron','aba','aban','ía','ían','ar','er','ir','ando','iendo','ado','ido'];
+function looksVerb(w){
+  const n=norm(w);if(AUX.has(n))return true;
+  return VERB_HINTS.some(s=>n.endsWith(s)) && n.length>4;
+}
+function inferType(word){
+  const w=norm(word);
+  if(/^\d{1,2}[:.]\d{2}$/.test(w)||/^\d{1,2}h\d{2}$/.test(w))return 'tiempo';
+  if(/^\d+(?:[.,]\d+)?$/.test(w))return 'cantidad';
+  if(['feo','fea','lindo','linda','grande','pequeño','pequeno','pequeña','pequena','rápido','rapido','rápida','rapida','lento','lenta','bueno','buena','malo','mala'].includes(w))return 'propiedad';
+  if(looksVerb(w)||/(cion|sion|miento|mento)$/.test(w))return 'evento';
+  if(/(dad|ez|ura|ncia)$/.test(w))return 'estado';
+  if(/(lugar|sitio|ciudad|pueblo|ruta|camino|carretera|refugio|casa|escuela|hospital)$/.test(w))return 'lugar';
+  if(/(persona|personas|hombre|mujer|alcalde|turista|turistas|equipo|autoridad|habitante|habitantes)$/.test(w))return 'actor';
+  return 'entidad';
+}
+function relationFromBridge(bridge){
+  const b=norm(bridge);
+  if(relationExpressionMatches('REQUIRES',b))return {relation:'REQUIRES',cues:['necesita','requiere','debe comprar','tiene que comprar']};
+  if(/porque|debido|caus|provoc|oblig/.test(b))return {relation:'CAUSES',cues:['porque','debido','caus','provoc','oblig']};
+  if(/impid|evit|bloque/.test(b))return {relation:'PREVENTS',cues:['impid','evit','bloque']};
+  if(/\bpara\b/.test(' '+b+' '))return {relation:'PURPOSE',cues:['para']};
+  if(/despues|después|tras/.test(b))return {relation:'AFTER',cues:['después','despues','tras']};
+  if(/antes/.test(b))return {relation:'BEFORE',cues:['antes']};
+  return {relation:'RELATES_TO',cues:[]};
+}
+function aliasesFor(word){
+  const n=norm(word),set=new Set([word,n]);
+  if(n.endsWith('s')&&n.length>4)set.add(n.slice(0,-1));
+  if(n.endsWith('es')&&n.length>5)set.add(n.slice(0,-2));
+  if(n.endsWith('cion'))set.add(n.replace(/cion$/,''));
+  return [...set].filter(Boolean);
+}
+function detectExplicitAnchor(text){
+  const m=norm(text).match(/\btan\s+([a-zñáéíóúü]+)\s+que\b/);
+  return m?m[1]:null;
+}
+function inferSemanticRole(raw,index,total,text){
+  const w=norm(raw);
+  const anchor=detectExplicitAnchor(text);
+  if(anchor && w===anchor)return {role:'ANCHOR',salience:1};
+  const ntext=norm(text);
+
+  // Repetition can be a useful signal for a possible lexical pivot, but we keep
+  // it conservative because true polysemy requires deeper semantic analysis.
+  const occurrences=(ntext.match(new RegExp(`\\b${w.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')}\\b`,'g'))||[]).length;
+  if(occurrences>=2 && w.length>3)return {role:'PIVOT',salience:.9};
+
+  if(index===0)return {role:'SETUP',salience:.72};
+  if(index===total-1)return {role:'PUNCHLINE',salience:.92};
+  if(index===total-2 && total>=4)return {role:'PUNCHLINE',salience:.82};
+
+  if(anchor){
+    const anchorPos=ntext.indexOf(anchor);
+    const pos=ntext.indexOf(w);
+    if(pos>anchorPos && /(zoolog|boleto|entrar|salir|absurd|doble|dos)/.test(w)){
+      return {role:'EXAGGERATION',salience:.86};
+    }
+  }
+
+  if(/pero|aunque|sin embargo/.test(ntext) && index>=Math.floor(total/2))return {role:'FRAME_SHIFT',salience:.82};
+  return {role:'SUPPORT',salience:.52};
+}
+function generateLevelFromText(text,difficulty=2){
+  const cleaned=text.trim();
+  if(!cleaned)throw new Error('Escribe un texto objetivo.');
+  const tokenRe=/[A-Za-zÁÉÍÓÚÜÑáéíóúüñ0-9]+/g;
+  const matches=[...cleaned.matchAll(tokenRe)].map(m=>({raw:m[0],n:norm(m[0]),start:m.index,end:m.index+m[0].length}));
+  const explicitAnchor=detectExplicitAnchor(cleaned);
+  const significant=matches.filter(x=>(x.n.length>3||x.n===explicitAnchor)&&!STOP.has(x.n)&&!AUX.has(x.n)&&!OPERATOR_TOKENS.has(x.n));
+  const maxNodes={1:6,2:8,3:10,4:12}[difficulty]||8;
+
+  // Keep important unique terms in original order.
+  const picked=[],seen=new Set();
+  for(const x of significant){
+    let key=x.n;
+    if(key.endsWith('s')&&key.length>5)key=key.slice(0,-1);
+    if(seen.has(key))continue;
+    seen.add(key);picked.push(x);
+    if(picked.length>=maxNodes)break;
+  }
+  if(picked.length<2){
+    for(const x of matches){
+      if(x.n.length<=2||STOP.has(x.n)||OPERATOR_TOKENS.has(x.n)||seen.has(x.n))continue;
+      seen.add(x.n);picked.push(x);if(picked.length>=Math.max(3,maxNodes))break;
+    }
+  }
+  if(explicitAnchor && !picked.some(x=>x.n===explicitAnchor)){
+    const ax=matches.find(x=>x.n===explicitAnchor);
+    if(ax){
+      picked.splice(Math.min(1,picked.length),0,ax);
+      if(picked.length>maxNodes)picked.pop();
+    }
+  }
+
+  const used=new Set();
+  const nodes=picked.map((x,i)=>{
+    const id=uniqueId(slug(x.n),used);
+    const visibleRatio={1:.72,2:.55,3:.38,4:.25}[difficulty]||.5;
+    const visible=i===0||i===picked.length-1||((i*37+difficulty*11)%100)/100<visibleRatio;
+    const semantic=inferSemanticRole(x.raw,i,picked.length,cleaned);
+    return {
+      id,label:x.raw.toLowerCase(),type:inferType(x.raw),visible,
+      semantic_role:semantic.role,salience:semantic.salience,
+      words:aliasesFor(x.raw),color:COLORS[i%COLORS.length],points:60+(i%4)*15,
+      _start:x.start,_end:x.end
+    };
+  });
+
+  const edges=[];
+  for(let i=0;i<nodes.length-1;i++){
+    const a=nodes[i],b=nodes[i+1];
+    const bridge=cleaned.slice(a._end,b._start);
+    let rr=relationFromBridge(bridge);
+    if(b.type==='propiedad')rr={relation:'HAS_PROPERTY',cues:[]};
+
+    // "para ir/va al <lugar>" establishes a frame/location, not a PURPOSE edge
+    // from an adjective/property to the place.
+    if(b.type==='lugar' && /(ir|va|visita|visitar)/.test(norm(bridge))){
+      rr={relation:'AT',cues:[]};
+    }
+    const visibleRatio={1:.72,2:.5,3:.32,4:.20}[difficulty]||.45;
+    const visible=i===0||((i*29+difficulty*17)%100)/100<visibleRatio;
+    edges.push({
+      id:'e'+(i+1),source:a.id,target:b.id,relation:rr.relation,visible,
+      points:80+(i%3)*20,cues:rr.cues
+    });
+  }
+  // Add one semantic skip-edge when a strong connector exists across a wider span.
+  const nt=norm(cleaned);
+  if(nodes.length>=4&&/(porque|debido|para|oblig|impid|provoc|caus)/.test(nt)){
+    const mid=Math.floor(nodes.length/2);
+    const rr=relationFromBridge(cleaned);
+    edges.push({
+      id:'e'+(edges.length+1),source:nodes[0].id,target:nodes[mid].id,relation:rr.relation==='RELATES_TO'?'CAUSES':rr.relation,
+      visible:difficulty===1,points:120,cues:rr.cues
+    });
+  }
+  nodes.forEach(n=>{delete n._start;delete n._end});
+  const levelId='custom_'+Date.now();
+  const evidence=[{
+    id:levelId+'_evidence_1',
+    kind:'reference',
+    title:'Evidencia inicial',
+    description:'La referencia visible respalda solamente los elementos revelados del grafo.',
+    supports:[
+      ...nodes.filter(n=>n.visible).map(n=>'node:'+n.id),
+      ...edges.filter(e=>e.visible).map(e=>'edge:'+e.id)
+    ]
+  }];
+  return {
+    id:levelId,
+    name:`Nuevo nivel · ${['','Fácil','Media','Difícil','Muy difícil'][difficulty]||'Media'}`,
+    difficulty,
+    targetText:cleaned,
+    evidence,
+    nodes,edges
+  };
+}
+
+/* ---------- CREATOR UI ---------- */
+function ensureDraft(){
+  if(!draft){
+    draft=generateLevelFromText('La lluvia bloqueó el camino y obligó al equipo a buscar otra ruta.',2);
+  }
+}
+async function renderDraft(){
+  if(!draft)return;
+  nodeCount.textContent=`${draft.nodes.length} nodos`;
+  edgeCount.textContent=`${draft.edges.length} relaciones`;
+  nodeEditor.innerHTML=draft.nodes.map((n,i)=>`
+    <div class="edit-row node-row" data-node-index="${i}">
+      <input class="mini-input" data-k="label" value="${esc(n.label)}" title="Label">
+      <select class="mini-select" data-k="type" title="Tipo semántico">
+        ${['entidad','evento','estado','actor','lugar','tiempo','cantidad','propósito','riesgo','propiedad'].map(t=>`<option ${n.type===t?'selected':''}>${t}</option>`).join('')}
+      </select>
+      <select class="mini-select" data-k="semantic_role" title="Función dentro del significado">
+        ${SEMANTIC_ROLES.map(r=>`<option ${((n.semantic_role||'SUPPORT')===r)?'selected':''}>${r}</option>`).join('')}
+      </select>
+      <input class="mini-input" data-k="words" value="${esc((n.words||[]).join(', '))}" title="Aliases separados por coma">
+      <input class="mini-input" data-k="salience" type="number" min="0.1" max="1" step="0.05" value="${Number(n.salience??.55).toFixed(2)}" title="Salience 0.10–1.00">
+      <div class="check-wrap"><input type="checkbox" data-k="visible" ${n.visible?'checked':''} title="Visible"></div>
+      <input class="mini-input" data-k="points" type="number" value="${Number(n.points||0)}" title="Puntos base">
+      <button class="icon-btn" data-del-node="${i}" title="Eliminar">×</button>
+    </div>`).join('');
+
+  const opts=draft.nodes.map(n=>`<option value="${esc(n.id)}">${esc(n.label)}</option>`).join('');
+  edgeEditor.innerHTML=draft.edges.map((e,i)=>`
+    <div class="edit-row edge-row" data-edge-index="${i}">
+      <select class="mini-select" data-k="source">${opts.replace(`value="${esc(e.source)}"`,`value="${esc(e.source)}" selected`)}</select>
+      <select class="mini-select" data-k="target">${opts.replace(`value="${esc(e.target)}"`,`value="${esc(e.target)}" selected`)}</select>
+      <select class="mini-select" data-k="relation">${RELATIONS.map(r=>`<option ${e.relation===r?'selected':''}>${r}</option>`).join('')}</select>
+      <div class="check-wrap"><input type="checkbox" data-k="visible" ${e.visible?'checked':''}></div>
+      <input class="mini-input" data-k="points" type="number" value="${Number(e.points||0)}">
+      <button class="icon-btn" data-del-edge="${i}" title="Eliminar">×</button>
+    </div>`).join('');
+
+  await renderSvgGraph(draftSvg,draft,{large:true});
+}
+function updateDraftFromEvent(e){
+  const nr=e.target.closest('[data-node-index]');
+  if(nr){
+    const i=+nr.dataset.nodeIndex,n=draft.nodes[i],k=e.target.dataset.k;if(!k)return;
+    if(k==='visible')n.visible=e.target.checked;
+    else if(k==='points')n.points=Number(e.target.value||0);
+    else if(k==='salience')n.salience=Math.max(.1,Math.min(1,Number(e.target.value||.55)));
+    else if(k==='words')n.words=e.target.value.split(',').map(x=>x.trim()).filter(Boolean);
+    else n[k]=e.target.value;
+    renderSvgGraph(draftSvg,draft,{large:true});return;
+  }
+  const er=e.target.closest('[data-edge-index]');
+  if(er){
+    const i=+er.dataset.edgeIndex,ed=draft.edges[i],k=e.target.dataset.k;if(!k)return;
+    if(k==='visible')ed.visible=e.target.checked;
+    else if(k==='points')ed.points=Number(e.target.value||0);
+    else ed[k]=e.target.value;
+    if(k==='relation')ed.cues=relationDefaultCues(ed.relation);
+    renderSvgGraph(draftSvg,draft,{large:true});
+  }
+}
+function relationDefaultCues(r){
+  return ({
+    CAUSES:['caus','provoc','oblig','debido','porque'],
+    PREVENTS:['impid','evit','bloque'],
+    REQUIRES:['necesita','requiere','debe comprar','tiene que comprar','debe adquirir'],
+    PURPOSE:['para'],
+    BEFORE:['antes'],
+    AFTER:['después','despues','tras']
+  })[r]||[];
+}
+function cleanLevelForExport(l){
+  return {
+    id:l.id,name:l.name,difficulty:Number(l.difficulty||2),targetText:l.targetText,
+    evidence:(l.evidence||[]).map(ev=>({
+      id:ev.id,kind:ev.kind||'reference',title:ev.title||'Evidencia',
+      description:ev.description||'',supports:[...(ev.supports||[])]
+    })),
+    nodes:l.nodes.map(n=>({
+      id:n.id,label:n.label,type:n.type,semantic_role:n.semantic_role||'SUPPORT',
+      salience:nodeSalience(n),visible:!!n.visible,words:n.words||[n.label],
+      color:Number(n.color||0x8672f2),points:Number(n.points||0)
+    })),
+    edges:l.edges.map(e=>({id:e.id,source:e.source,target:e.target,relation:e.relation,visible:!!e.visible,points:Number(e.points||0),cues:e.cues||relationDefaultCues(e.relation)}))
+  };
+}
+function addOrReplaceLevel(l){
+  const clean=normalizeEvidence(cleanLevelForExport(l));
+  const ix=LEVELS.findIndex(x=>x.id===clean.id);
+  if(ix>=0)LEVELS[ix]=clean;else LEVELS.push(clean);
+  refreshLevelSelect();
+  return LEVELS.findIndex(x=>x.id===clean.id);
+}
+function saveCustomLevels(){
+  const custom=LEVELS.filter(x=>!BUILTINS.some(b=>b.id===x.id));
+  localStorage.setItem('semantic_fx_custom_levels',JSON.stringify(custom.map(cleanLevelForExport)));
+}
+function restoreCustomLevels(){
+  try{
+    const arr=JSON.parse(localStorage.getItem('semantic_fx_custom_levels')||'[]');
+    for(const l of arr){try{validateLevel(l);if(!LEVELS.some(x=>x.id===l.id))LEVELS.push(l)}catch{}}
+  }catch{}
+}
+function downloadJson(l){
+  const blob=new Blob([JSON.stringify(cleanLevelForExport(l),null,2)],{type:'application/json'});
+  const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=(l.id||'level')+'.json';a.click();
+  setTimeout(()=>URL.revokeObjectURL(url),500);
+}
+
+/* events */
+function setMode(mode){
+  const play=mode==='play';
+  playTab.classList.toggle('active',play);createTab.classList.toggle('active',!play);
+  playView.classList.toggle('active',play);creatorView.classList.toggle('active',!play);
+  playTop.style.display=play?'flex':'none';metrics.style.display=play?'flex':'none';
+  if(!play){ensureDraft();renderDraft()}
+  else{setTimeout(()=>{if(root)applyView()},0)}
+}
+playTab.onclick=()=>setMode('play');
+createTab.onclick=()=>setMode('create');
+
+levelSelect.addEventListener('change',()=>loadLevel(+levelSelect.value));
+editor.addEventListener('input',()=>updatePlay(editor.value));
+targetBtn.onclick=()=>modal.classList.add('open');
+$('#closeModal').onclick=()=>modal.classList.remove('open');
+modal.addEventListener('click',e=>{if(e.target===modal)modal.classList.remove('open')});
+$('#zoomIn').onclick=()=>setZoom(zoom+.15);
+$('#zoomOut').onclick=()=>setZoom(zoom-.15);
+$('#fitBtn').onclick=fit;
+stage.addEventListener('wheel',e=>{e.preventDefault();setZoom(zoom+(e.deltaY<0?.12:-.12))},{passive:false});
+stage.addEventListener('pointerdown',e=>{if(e.target.closest?.('.zoom'))return;dragging=true;dragOrigin={x:e.clientX-panX,y:e.clientY-panY};stage.setPointerCapture?.(e.pointerId)});
+stage.addEventListener('pointermove',e=>{if(!dragging)return;panX=e.clientX-dragOrigin.x;panY=e.clientY-dragOrigin.y;applyView()});
+stage.addEventListener('pointerup',()=>dragging=false);stage.addEventListener('pointercancel',()=>dragging=false);
+
+tokens.addEventListener('mousemove',e=>{
+  const el=e.target.closest('.tok');if(!el){tooltip.classList.remove('show');return}
+  tooltip.innerHTML=`<strong>${esc(el.dataset.tip||'')}</strong><span>${esc(el.dataset.extra||'')}</span><em>Estado derivado del texto actual</em>`;
+  tooltip.classList.add('show');let x=e.clientX+12,y=e.clientY+16;const r=tooltip.getBoundingClientRect();
+  if(x+r.width>innerWidth-12)x=e.clientX-r.width-12;if(y+r.height>innerHeight-12)y=e.clientY-r.height-12;
+  tooltip.style.left=x+'px';tooltip.style.top=y+'px';
+});
+tokens.addEventListener('mouseleave',()=>tooltip.classList.remove('show'));
+
+$('#generateBtn').onclick=async()=>{
+  try{
+    draft=generateLevelFromText(creatorText.value,+difficultySelect.value);
+    await renderDraft();
+  }catch(err){alert(err.message)}
+};
+$('#addNodeBtn').onclick=async()=>{
+  ensureDraft();const used=new Set(draft.nodes.map(n=>n.id));const id=uniqueId('nuevo',used);
+  draft.nodes.push({id,label:'nuevo concepto',type:'entidad',semantic_role:'SUPPORT',salience:.5,visible:false,words:['nuevo concepto'],color:COLORS[draft.nodes.length%COLORS.length],points:70});
+  await renderDraft();
+};
+$('#addEdgeBtn').onclick=async()=>{
+  ensureDraft();if(draft.nodes.length<2)return alert('Necesitas al menos dos nodos.');
+  const id='e'+(Math.max(0,...draft.edges.map(e=>Number(String(e.id).replace(/\D/g,''))||0))+1);
+  draft.edges.push({id,source:draft.nodes[0].id,target:draft.nodes[1].id,relation:'RELATES_TO',visible:false,points:80,cues:[]});
+  await renderDraft();
+};
+nodeEditor.addEventListener('input',updateDraftFromEvent);nodeEditor.addEventListener('change',updateDraftFromEvent);
+edgeEditor.addEventListener('input',updateDraftFromEvent);edgeEditor.addEventListener('change',updateDraftFromEvent);
+nodeEditor.addEventListener('click',async e=>{
+  const b=e.target.closest('[data-del-node]');if(!b)return;const i=+b.dataset.delNode,id=draft.nodes[i].id;
+  draft.nodes.splice(i,1);draft.edges=draft.edges.filter(x=>x.source!==id&&x.target!==id);await renderDraft();
+});
+edgeEditor.addEventListener('click',async e=>{
+  const b=e.target.closest('[data-del-edge]');if(!b)return;draft.edges.splice(+b.dataset.delEdge,1);await renderDraft();
+});
+$('#exportBtn').onclick=()=>{if(!draft)return alert('Genera un nivel primero.');downloadJson(draft)};
+$('#saveBtn').onclick=()=>{
+  if(!draft)return alert('Genera un nivel primero.');
+  try{validateLevel(draft);addOrReplaceLevel(draft);saveCustomLevels();alert('Nivel guardado en este navegador.')}catch(err){alert(err.message)}
+};
+$('#playDraftBtn').onclick=async()=>{
+  if(!draft)return alert('Genera un nivel primero.');
+  try{
+    validateLevel(draft);
+    const ix=addOrReplaceLevel(draft);saveCustomLevels();setMode('play');refreshLevelSelect();await loadLevel(ix);
+  }catch(err){alert(err.message)}
+};
+$('#importJson').addEventListener('change',async e=>{
+  const f=e.target.files?.[0];if(!f)return;
+  try{
+    const obj=JSON.parse(await f.text());validateLevel(obj);const ix=addOrReplaceLevel(obj);saveCustomLevels();refreshLevelSelect();await loadLevel(ix);
+  }catch(err){alert('No se pudo importar: '+err.message)}
+  e.target.value='';
+});
+window.addEventListener('resize',applyView);
+
+(async()=>{
+  restoreCustomLevels();refreshLevelSelect();
+  await initPixi();
+  await loadLevel(0);
+  creatorText.value='Tu mama es tan fea que para ir al zoologico necesita dos boletos. Uno para entrar y otro para salir.';
+})();
+})();
+</script>
+</body>
+</html>
